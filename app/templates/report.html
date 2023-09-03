@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Delivery report</title>
+    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
+    <style>
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+        .header h1 {
+            margin: 0;
+        }
+        .header a {
+            text-decoration: none;
+            color: white;
+        }
+        .logout-button {
+            background-color: #dc3545;
+            border: none;
+            padding: 5px 10px;
+            border-radius: 5px;
+        }
+        
+        table.table th {
+            font-size: 14px; /* 원하는 폰트 크기로 조정 */
+        }
+        table.table td {
+            font-size: 12px; /* 원하는 폰트 크기로 조정 */
+            text-align: right;
+        }
+        .up {color: red;}
+        .dn {color: blue;}
+    </style>
+</head>
+<body>
+    
+    <div class="container-fluid mt-5">
+        <div class="header">
+            <h1>{{ umail }}</h1>
+            <a href="{{ url_for('auth.logout') }}" class="btn btn-danger logout-button">로그아웃</a>
+        </div>
+        <div class="form-group">
+            <label for="viewType">View Type:</label>
+            <div class="form-check form-check-inline">
+                <input class="form-check-input" type="radio" name="viewType" id="weeklyRadio" value="weekly" {% if viewType == 'weekly' %}checked{% endif %}>
+                <label class="form-check-label" for="weeklyRadio">주간 보기</label>
+            </div>
+            <div class="form-check form-check-inline">
+                <input class="form-check-input" type="radio" name="viewType" id="dailyRadio" value="daily" {% if viewType == 'daily' %}checked{% endif %}>
+                <label class="form-check-label" for="dailyRadio">일간 보기</label>
+            </div>
+        </div>
+        <table class="table">
+            <thead>
+                <tr>
+                    <th scope="col">Regist {{repdate_title}}</th>
+                    {% for purl in purls %}
+                        <th scope="col" colspan="2"><a href="{{ purl.split('|')[1] }}" target="_blank">{{ purl.split('|')[0] }}</a></th>
+                    {% endfor %}
+                </tr>   
+            </thead>
+            <tbody class="table-group-divider">
+                {% for repdate, values in pivot_data.items() %}
+                    <tr>
+                        <th>{{ repdate }}</th>
+                        {% for purl in purls %}
+                            {% if values[purl] %}
+                                <td>
+                                    <strong>{{ values[purl]["data"] }}</strong>
+                                </td>
+                                <td>
+                                    {% if values[purl]["diff"] > 0 %}
+                                        <span class="up"> ▲ </span>{{ values[purl]["diff"] }}
+                                    {% elif values[purl]["diff"] < 0 %}
+                                        <span class="dn"> ▼ </span>{{ values[purl]["diff"] }}
+                                    {% else %}
+                                        -
+                                    {% endif %}
+                                </td>
+                            {% else %}
+                                <td>-</td>
+                                <td>-</td>
+                            {% endif %}
+
+                        {% endfor %}
+                    </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        <div id="chart" style="padding: 15px;"></div>
+    </div>
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/apexcharts"></script>
+
+    <script>
+        // 페이지가 로드될 때 API를 호출하여 데이터를 가져옵니다.
+       function makeColor(){
+        const rnd = Math.floor(Math.random() * 100)+1;
+        const rnd2 = Math.floor(Math.random() * 100)+1;
+        const colors = `hsl(${parseInt(Math.random() * 24, 10) * 15}, ${rnd}%, 42%)`;
+        return colors;
+       }
+
+        $(document).ready(function() {
+            // API 엔드포인트를 호출합니다.
+            axios.get('/api/report?vi={{viewType}}')
+                .then(function(response) {
+                    // API 응답에서 데이터를 추출합니다.
+                    const list = response.data;
+                    let series = [];
+                    let categories = [];
+                    let gcolor = [];
+                    let maxval = 0; 
+                    let minval = 0;
+                    
+                    //업체별 루프
+                    $.each(list,function(key, item){
+                      let data = [];
+                      let grape = {};
+                    //   gcolor = []
+                      
+                      //날짜별 루프
+                      $.each(item,function(key2, item2){
+                        categories.push(item2.repdate)
+                        
+                        gcolor.push(makeColor())
+                        data.push(item2.data)
+                        grape.name = item2.name
+                        grape.data = data
+
+                        maxval = item2.data > maxval ? item2.data : maxval
+                        minval = item2.data <= minval ? item2.data : minval
+                      })
+
+                      series.push(grape);
+                        
+                    });
+                    // Array.from(new Set(categories));
+                    // console.log(maxval, minval)
+                    // console.log(gcolor)
+                    var options = {
+                    series: series,
+                    xaxis: {
+                      categories: categories,
+                    //   title: {
+                    //     text: 'Month'
+                    //   }
+                    },
+                    yaxis: {
+                      title: {
+                        text: 'Count'
+                      },
+                      min: minval,
+                      max: maxval
+                    },
+                    colors: gcolor,
+
+                    chart: {
+                    //   width: '90%',
+                      height: 450,
+                      type: 'line',
+                      
+                      toolbar: {
+                        show: false
+                      }
+                    },
+                    
+                    dataLabels: {
+                      enabled: false,
+                    },
+                    stroke: {
+                      width: 2,
+                      curve: 'straight',
+                    },
+                    title: {
+                      text: '그래프로 보기',
+                      align: 'left'
+                    },
+                    grid: {
+                      borderColor: '#f1f1f1',
+                    },
+                    
+                    
+                    markers: {
+                      size: 0,
+                      hover: {
+                        sizeOffset: 6
+                      }
+                    },
+                    legend: {
+                      position: 'bottom',
+                      horizontalAlign: 'center',
+                      floating: false,
+                      offsetY: 5,
+                      offsetX: 0
+                    }
+                  };
+
+                  var chart = new ApexCharts(document.querySelector("#chart"), options);
+                  chart.render();
+
+                })
+                .catch(function(error) {
+                    console.error('API 요청 실패:', error);
+                });
+
+                document.querySelectorAll('input[type=radio]').forEach(function(radio) {
+                    radio.addEventListener('change', function() {
+                        var viewType = this.value;
+                        if (viewType === 'weekly') {
+                            window.location.href = "{{ url_for('report.report', vi='weekly') }}";
+                        } else if (viewType === 'daily') {
+                            window.location.href = "{{ url_for('report.report', vi='daily') }}";
+                        }
+                    });
+                });
+        });
+    </script>
+</body>
+</html>

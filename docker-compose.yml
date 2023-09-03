@@ -1,0 +1,78 @@
+version: '3'
+services:
+    # fluentd:
+    #     build:
+    #         context: fluentd-elasticsearch/ 
+    #     ports:
+    #         - "24224:24224"
+    #         - "24220:24220"
+
+    redis:
+        build: ./redis
+        ports: 
+            - '6379:6379'
+        networks:
+            - ovp   
+
+    transcoder:
+        build: ./transcoder
+        ports:
+            - "8080:8080"
+        links:
+            - redis
+            # - nodeserver
+        environment:
+            TRANSCODER_IS_MASTER: "true"
+            TRANSCODER_MAX_CONCURRENT_WORKS: 1
+            TRANSCODER_REDIS_ADDRESS: "redis:6379"
+            TRANSCODER_CDN_FTP_ROOT : "axissoft"
+             
+        volumes: 
+            - data_volume:/usr/app/bin/output
+        networks:
+            - ovp            
+        # logging:
+        #    driver: "fluentd"
+        #    options: 
+        #        fluentd-address: "192.168.0.116:24224"
+        #        tag: "docker.{{.Name}}"    
+
+    # nodeserver:
+    #     build: ./nodeserver
+    #     ports:
+    #         - "3002:3002"
+    #     networks:
+    #         - ovp            
+    #     # logging:
+    #     #     driver: "fluentd"
+    #     #     options: 
+    #     #         fluentd-address: "localhost:24224"
+    #     #         tag: "docker.{{.Name}}"
+
+    sftpgo:
+        build: ./sftpgo
+        ports:
+            - "2022:2022"
+            - "8088:8088"
+        depends_on:
+            - transcoder
+        links:
+            - transcoder
+        volumes: 
+            - data_volume:/srv/sftpgo/data
+            - sftpgo_volume:/var/lib/sftpgo
+        networks:
+            - ovp        
+        # logging:
+        #     driver: "fluentd"
+        #     options: 
+        #         fluentd-address: "localhost:24224"
+        #         tag: "docker.{{.Name}}"         
+    
+networks:
+  ovp:
+    driver: bridge
+
+volumes: 
+  data_volume:
+  sftpgo_volume:
